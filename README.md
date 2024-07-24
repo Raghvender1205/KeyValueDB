@@ -34,11 +34,11 @@ This `database` currently have the following features
 - A background thread periodically compacts the file by removing `expired` entries.
 - The `compact_file_periodically` method handles this process.
 
-## Writing snapshots
+### Writing snapshots
 - The `write_snapshot` method writes the current state of the in-memory `HashMap` to the file, overwriting its contents.
 
-## Handling Entry Expiration
+### Handling Entry Expiration
 - KeyStoreDB checks and handles entry expiration during `retrieval`, `deletion` and `compaction`.
 
-## Graceful Shutdown
+### Graceful Shutdown
 - The `Drop` trait implementation ensures that the compaction thread stops gracefully when the `KVStore` instance is dropped.
