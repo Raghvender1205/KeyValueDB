@@ -6,3 +6,19 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.120"
+
+[[example]]
+name = "basic_operations"
+path = "examples/basic_operations.rs"
+
+[[example]]
+name = "expiration_handling"
+path = "examples/expiration_handling.rs"
+
+[[example]]
+name = "snapshot_writing"
+path = "examples/snapshot_writing.rs"
+
+[[example]]
+name = "periodic_compaction"
+path = "examples/periodic_compaction.rs"

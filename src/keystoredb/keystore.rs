@@ -62,6 +62,15 @@ impl KVStore {
         self.map.keys().cloned().collect()
     }
 
+    pub fn write_snapshot(&self) -> io::Result<()> {
+        let snapshot_file = format!("{}_snapshot.json", self.file_path);
+        let file = File::create(&snapshot_file)?;
+        let writer = BufWriter::new(file);
+        serde_json::to_writer(writer, &self.map)?;
+        println!("Snapshot written to {}", snapshot_file);
+        Ok(())
+    }
+
     fn save(&self) -> io::Result<()> {
         let file = File::create(&self.file_path)?;
         let writer = BufWriter::new(file);
