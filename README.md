@@ -50,3 +50,23 @@ This `database` currently have the following features
 ### Batched Updates
 - Efficient Disk I/O
 - It performs disk writes in a batched manner, reducing I/O overhead and making `set` and `delete` operation more efficient.  
+
+
+## TODO
+1. Transactional Support
+2. Backup and Restore
+3. Configuration Management
+4. Concurrency Control
+5. Compression
+6. Data Expiry Notifications
+7. Custom Serialization
+8. Statistics and Metrics
+9. Versioning 
+10. Query Support
+11. Replication
+12. Encryption
+13. Sharding
+14. Caching
+15. Import/Export
+16. Custom Key Comparisons
+17. Data Integrity Checks
