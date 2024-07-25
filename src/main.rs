@@ -5,7 +5,7 @@ use std::io;
 use std::time::Duration;
 
 fn main() -> io::Result<()> {
-    let store = KVStore::new("kv_store.db")?;
+    let mut store = KVStore::new("kv_store.db")?;
 
     store.set("name".to_string(), "Alice".to_string(), None)?;
     println!("Get name: {:?}", store.get("name"));

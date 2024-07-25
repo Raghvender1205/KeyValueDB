@@ -42,3 +42,11 @@ This `database` currently have the following features
 
 ### Graceful Shutdown
 - The `Drop` trait implementation ensures that the compaction thread stops gracefully when the `KVStore` instance is dropped.
+
+### Concurrency
+- Thread safe access.
+- `KeyStoreDB` uses `Arc` and `Mutex` to ensure thread-safe access to the in-memory data structure and the file, allowing multiple threads to interact with the database concurrently.
+
+### Batched Updates
+- Efficient Disk I/O
+- It performs disk writes in a batched manner, reducing I/O overhead and making `set` and `delete` operation more efficient.  

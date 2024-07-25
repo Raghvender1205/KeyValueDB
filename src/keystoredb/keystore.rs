@@ -1,144 +1,79 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::fs::{File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Write, Seek, SeekFrom};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::thread;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::{self, BufReader, BufWriter};
+use std::time::{Duration, SystemTime};
 
-use crate::keystoredb::kvpair::KVPair;
-
+#[derive(Serialize, Deserialize)]
+struct Entry {
+    value: String,
+    expires_at: Option<SystemTime>,
+}
 
 pub struct KVStore {
-    map: Arc<Mutex<HashMap<String, KVPair>>>,
-    file: Arc<Mutex<File>>,
-    stop_compaction: Arc<AtomicBool>,
+    map: HashMap<String, Entry>,
+    file_path: String,
+    unsaved_changes: bool,
 }
-
 
 impl KVStore {
-    pub fn new(filename: &str) -> io::Result<Self> {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(filename)?;
-        
-        let mut map = HashMap::new();
-        let reader = BufReader::new(&file);
-
-        for line in reader.lines() {
-            let line = line?;
-            if let Ok(kv) = serde_json::from_str::<KVPair>(&line) {
-                if kv.expires_at.is_none() || kv.expires_at.unwrap() > current_timestamp() {
-                    map.insert(kv.key.clone(), kv);
-                }
-            }
-        }
-
-        let store = KVStore {
-            map: Arc::new(Mutex::new(map)),
-            file: Arc::new(Mutex::new(file)),
-            stop_compaction: Arc::new(AtomicBool::new(false)),
+    pub fn new(file_path: &str) -> io::Result<Self> {
+        let file = OpenOptions::new().read(true).write(true).create(true).open(file_path)?;
+        let reader = BufReader::new(file);
+        let map: HashMap<String, Entry> = match serde_json::from_reader(reader) {
+            Ok(map) => map,
+            Err(_) => HashMap::new(),
         };
-
-        let store_clone = store.clone();
-        thread::spawn(move || {
-            store_clone.compact_file_periodically();
-        });
-
-        Ok(store)
-    }       
-
-    fn clone(&self) -> Self {
-        KVStore {
-            map: Arc::clone(&self.map),
-            file: Arc::clone(&self.file),
-            stop_compaction: Arc::clone(&self.stop_compaction),
-        }
+        Ok(KVStore {
+            map,
+            file_path: file_path.to_string(),
+            unsaved_changes: false,
+        })
     }
 
-    pub fn set(&self, key: String, value: String, ttl: Option<Duration>) -> io::Result<()> {
-        let expires_at = ttl.map(|duration| current_timestamp() + duration.as_secs());
-        let kv = KVPair { key: key.clone(), value: value.clone(), expires_at };
-        let mut map = self.map.lock().unwrap();
-        map.insert(key.clone(), kv.clone()); // Clone kv before inserting into the map
-
-        let mut file = self.file.lock().unwrap();
-        writeln!(file, "{}", serde_json::to_string(&kv)?)?;
-        let _ = file.sync_all();
-        Ok(())
+    pub fn set(&mut self, key: String, value: String, ttl: Option<Duration>) -> io::Result<()> {
+        let expires_at = ttl.map(|d| SystemTime::now() + d);
+        let entry = Entry { value, expires_at };
+        self.map.insert(key, entry);
+        self.unsaved_changes = true;
+        self.save_if_needed()
     }
-
 
     pub fn get(&self, key: &str) -> Option<String> {
-        let mut map = self.map.lock().unwrap();
-        if let Some(kv) = map.get(key) {
-            if kv.expires_at.is_none() || kv.expires_at.unwrap() > current_timestamp() {
-                return Some(kv.value.clone());
-            } else {
-                map.remove(key);
+        if let Some(entry) = self.map.get(key) {
+            if let Some(expiry) = entry.expires_at {
+                if expiry < SystemTime::now() {
+                    return None;
+                }
             }
+            return Some(entry.value.clone());
         }
         None
     }
 
-
-    pub fn delete(&self, key: &str) -> Option<String> {
-        let mut map = self.map.lock().unwrap();
-        if let Some(kv) = map.remove(key) {
-            self.write_snapshot().unwrap();
-            return Some(kv.value);
-        }
-        None
+    pub fn delete(&mut self, key: &str) -> Option<String> {
+        let value = self.map.remove(key)?;
+        self.unsaved_changes = true;
+        self.save_if_needed().ok()?;
+        Some(value.value)
     }
-
 
     pub fn list_keys(&self) -> Vec<String> {
-        let map = self.map.lock().unwrap();
-        map.keys().cloned().collect()
+        self.map.keys().cloned().collect()
     }
 
-    fn write_snapshot(&self) -> io::Result<()> {
-        let map = self.map.lock().unwrap();
-        let mut file = self.file.lock().unwrap();
-        file.set_len(0)?;
-        file.seek(SeekFrom::Start(0))?;
-
-        for kv in map.values() {
-            writeln!(file, "{}", serde_json::to_string(&kv)?)?;
-        }
-        file.sync_all()
-    }
-
-    fn compact_file_periodically(&self) {
-        while !self.stop_compaction.load(Ordering::SeqCst) {
-            thread::sleep(Duration::from_secs(60));
-            self.compact_file().unwrap();
-        }
-    }
-
-    fn compact_file(&self) -> io::Result<()> {
-        let mut map = self.map.lock().unwrap();
-
-        let new_map: HashMap<String, KVPair> = map.clone().into_iter()
-            .filter(|(_, kv)| kv.expires_at.is_none() || kv.expires_at.unwrap() > current_timestamp())
-            .collect();
-
-        *map = new_map;
-        self.write_snapshot()?;
+    fn save(&self) -> io::Result<()> {
+        let file = File::create(&self.file_path)?;
+        let writer = BufWriter::new(file);
+        serde_json::to_writer(writer, &self.map)?;
         Ok(())
     }
-}
 
-
-impl Drop for KVStore {
-    fn drop(&mut self) {
-        self.stop_compaction.store(true, Ordering::SeqCst);
+    fn save_if_needed(&mut self) -> io::Result<()> {
+        if self.unsaved_changes {
+            self.save()?;
+            self.unsaved_changes = false;
+        }
+        Ok(())
     }
-}
-
-
-fn current_timestamp() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
