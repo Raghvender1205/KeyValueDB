@@ -7,7 +7,7 @@ fn main() -> io::Result<()> {
     store.set("key1".to_string(), "value1".to_string(), None)?;
     store.set("key2".to_string(), "value2".to_string(), None)?;
 
-    store.write_snapshot()?;
+    store.save()?;
     println!("Snapshot written.");
 
     Ok(())

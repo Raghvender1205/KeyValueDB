@@ -22,3 +22,7 @@ path = "examples/snapshot_writing.rs"
 [[example]]
 name = "periodic_compaction"
 path = "examples/periodic_compaction.rs"
+
+[[example]]
+name = "backup_restore"
+path = "examples/backup_restore.rs"
